@@ -1,0 +1,90 @@
+name: Package
+
+# Every push to main builds a Windows and a Linux app-image with jpackage,
+# zips them, and publishes them on the rolling "latest" GitHub Release so
+# users can grab a ready-to-run download (no Java needed on their machine).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # required to upload assets to the release
+
+concurrency:
+  group: package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows
+            icon: src/main/resources/logo/tucu.ico
+            zip_name: TucuAuthenticator-windows.zip
+          - os: ubuntu-latest
+            label: Linux
+            icon: src/main/resources/logo/app-icon/tucu-icon-256.png
+            zip_name: TucuAuthenticator-linux.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Build fat jar
+        run: mvn -B package
+
+      - name: jpackage app-image
+        shell: bash
+        run: |
+          set -e
+          mkdir -p dist
+          cp target/tucu-authenticator-*.jar dist/
+          JAR="$(basename dist/*.jar)"
+          VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          jpackage \
+            --type app-image \
+            --name TucuAuthenticator \
+            --input dist \
+            --main-jar "$JAR" \
+            --main-class org.umilab.tucu.auth.App \
+            --app-version "$VERSION" \
+            --vendor Tucu \
+            --icon "${{ matrix.icon }}" \
+            --dest out
+
+      - name: Zip app image (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path out\TucuAuthenticator -DestinationPath "out\${{ matrix.zip_name }}"
+
+      - name: Zip app image (Linux)
+        if: runner.os == 'Linux'
+        run: cd out && zip -qr "${{ matrix.zip_name }}" TucuAuthenticator
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.label }}
+          path: out/${{ matrix.zip_name }}
+
+      - name: Publish to rolling "latest" release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view latest >/dev/null 2>&1 || \
+            gh release create latest \
+              --title "Latest build" \
+              --notes "Automated build of the newest commit on main. Download the zip for your OS, unzip it, and run the app inside — no Java installation needed." || true
+          gh release upload latest "out/${{ matrix.zip_name }}" --clobber

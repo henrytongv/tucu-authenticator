@@ -39,6 +39,15 @@ Both Aegis export modes are supported:
 
 Re-importing replaces entries that match by UUID. Favorites (`favorite` flag) are imported from Aegis; an account already favorited in Tucu keeps its star across re-imports.
 
+## Download (no Java needed)
+
+Grab the zip for your OS from the [latest release](https://github.com/henrytongv/tucu-authenticator/releases/latest) — rebuilt automatically on every push:
+
+- **Windows:** `TucuAuthenticator-windows.zip` — unzip, open the folder, run `TucuAuthenticator.exe`
+- **Linux:** `TucuAuthenticator-linux.zip` — unzip, run `TucuAuthenticator/bin/TucuAuthenticator`
+
+Each zip contains the app plus a bundled Java runtime, so nothing else needs to be installed.
+
 ## Run in development mode
 
 ```bash
